@@ -27,6 +27,9 @@ namespace Rcpp {
             for( int i=0; i<n ; i++){
                 start[i] = begin[indices[i]] ;    
             }
+            // vparetsk - re-getting the address of the data start will reset 
+            // TERR's NA flag on the underling data preventing its pollution
+            start = internal::r_vector_start<RTYPE>(data);
             SETLENGTH(data, n) ;
         }
         

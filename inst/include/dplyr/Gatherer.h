@@ -127,7 +127,7 @@ namespace dplyr {
     } ;
     
     
-    template <int RTYPE, typename Data, typename Subsets>
+    template <int RTYPE>
     class ConstantGathererImpl : public Gatherer {
     public:
         ConstantGathererImpl( Vector<RTYPE> constant, int n ) : value( n, Rcpp::internal::r_vector_start<RTYPE>(constant)[0] ){}
@@ -140,14 +140,40 @@ namespace dplyr {
         Vector<RTYPE> value ;
     } ;
     
-    template <int RTYPE, typename Data, typename Subsets>
-    class ConstantTypedGatherer : public ConstantGathererImpl<RTYPE, Data, Subsets> {
+    template <>
+    class ConstantGathererImpl <STRSXP>: public Gatherer {
     public:
-        ConstantTypedGatherer( Vector<RTYPE> constant, int n, SEXP classes_ ) : 
-            ConstantGathererImpl<RTYPE,Data,Subsets>( constant, n), classes(classes_){}
+        ConstantGathererImpl( CharacterVector constant, int n ) : value( n, get_string_elt(constant, 0) ){}
         
         inline SEXP collect() {
-            Vector<RTYPE> out = ConstantGathererImpl<RTYPE,Data,Subsets>::collect() ;
+            return value ;
+        }
+        
+    private:
+        CharacterVector value ;
+    } ;
+
+    template <>
+    class ConstantGathererImpl <VECSXP>: public Gatherer {
+    public:
+        ConstantGathererImpl( GenericVector constant, int n ) : value( n, get_vector_elt(constant, 0) ){}
+        
+        inline SEXP collect() {
+            return value ;
+        }
+        
+    private:
+        GenericVector value ;
+    } ;
+
+    template <int RTYPE, typename Data, typename Subsets>
+    class ConstantTypedGatherer : public ConstantGathererImpl<RTYPE> {
+    public:
+        ConstantTypedGatherer( Vector<RTYPE> constant, int n, SEXP classes_ ) : 
+            ConstantGathererImpl<RTYPE>( constant, n), classes(classes_){}
+        
+        inline SEXP collect() {
+            Vector<RTYPE> out = ConstantGathererImpl<RTYPE>::collect() ;
             out.attr("class") = classes ;
             return out ;
         }
@@ -158,15 +184,15 @@ namespace dplyr {
     } ;
     
     template <int RTYPE, typename Data, typename Subsets>
-    class ConstantDifftimeGatherer : public ConstantGathererImpl<RTYPE, Data, Subsets> {
+    class ConstantDifftimeGatherer : public ConstantGathererImpl<RTYPE> {
     public:
         ConstantDifftimeGatherer( Vector<RTYPE> constant, int n ) : 
-            ConstantGathererImpl<RTYPE,Data,Subsets>( constant, n), 
+            ConstantGathererImpl<RTYPE>( constant, n), 
             units(constant.attr("units"))
         {}
         
         inline SEXP collect() {
-            Vector<RTYPE> out = ConstantGathererImpl<RTYPE,Data,Subsets>::collect() ;
+            Vector<RTYPE> out = ConstantGathererImpl<RTYPE>::collect() ;
             out.attr("class") = "difftime" ;
             out.attr("units") = units ; 
             return out ;
@@ -182,17 +208,17 @@ namespace dplyr {
         switch( TYPEOF(x) ){
             case INTSXP: {
                     if( Rf_inherits(x, "Date" )) return new ConstantTypedGatherer<INTSXP,Data,Subsets>(x,n, get_date_classes() ) ;
-                    return new ConstantGathererImpl<INTSXP,Data,Subsets>( x, n ) ;
+                    return new ConstantGathererImpl<INTSXP>( x, n ) ;
             }
             case REALSXP: {
                     if( Rf_inherits(x, "difftime" )) return new ConstantDifftimeGatherer<REALSXP,Data,Subsets>(x,n) ;
                     if( Rf_inherits(x, "POSIXct" )) return new ConstantTypedGatherer<REALSXP,Data,Subsets>(x,n, get_time_classes() ) ;
                     if( Rf_inherits(x, "Date" )) return new ConstantTypedGatherer<REALSXP,Data,Subsets>(x,n, get_date_classes() ) ;
-                    return new ConstantGathererImpl<REALSXP,Data,Subsets>( x, n ) ;
+                    return new ConstantGathererImpl<REALSXP>( x, n ) ;
             }
-            case LGLSXP: return new ConstantGathererImpl<LGLSXP,Data,Subsets>( x, n ) ;
-            case STRSXP: return new ConstantGathererImpl<STRSXP,Data,Subsets>( x, n ) ;
-            case VECSXP: return new ConstantGathererImpl<STRSXP,Data,Subsets>( x, n ) ;
+            case LGLSXP: return new ConstantGathererImpl<LGLSXP>( x, n ) ;
+            case STRSXP: return new ConstantGathererImpl<STRSXP>( x, n ) ;
+            case VECSXP: return new ConstantGathererImpl<VECSXP>( x, n ) ;
             default: break ;
         }
         return 0 ;
